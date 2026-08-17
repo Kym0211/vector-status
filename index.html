@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Team status update on the Vector offline-signing CLI — mainnet deployment, verification coverage, security review findings, and open decisions.">
+<meta name="description" content="Team status update on the Vector offline-signing CLI - mainnet deployment, verification coverage, security review findings, and open decisions.">
 <meta name="color-scheme" content="light dark">
 <style>
-  /* minimal reset — supplied by the artifact runtime, inlined here for standalone hosting */
+  /* minimal reset - supplied by the artifact runtime, inlined here for standalone hosting */
   *, *::before, *::after { box-sizing: border-box; }
   body, h1, h2, h3, p, dl, dd, pre, figure { margin: 0; }
   img, svg { display: block; max-width: 100%; }
@@ -303,7 +303,7 @@
     <h1>Vector: offline signing without durable nonces</h1>
     <p class="lede">
       A cold wallet can now authorize SOL transfers, SPL token transfers, staking and DAO
-      votes by signing a 32-byte hash — never a Solana transaction. The on-chain program
+      votes by signing a 32-byte hash - never a Solana transaction. The on-chain program
       is deployed and the flow has been exercised end-to-end with real funds.
     </p>
     <div class="banner">
@@ -322,7 +322,7 @@
     </p>
     <p>
       The trade is that the cold wallet signs an opaque digest rather than a transaction, so
-      transactions never expire — the hot wallet attaches a fresh blockhash at broadcast time.
+      transactions never expire - the hot wallet attaches a fresh blockhash at broadcast time.
       That removes the ~60-second signing window that made air-gapped Solana signing painful.
     </p>
   </section>
@@ -376,7 +376,7 @@ new_seed  = sha256(seed ‖ digest)</code></pre>
         <p>
           The online machine writes <code>unsigned-tx.json</code>. The offline machine
           recomputes the digest from the raw instructions, renders what they actually do, and
-          only then signs — producing <code>signed-tx.json</code>. Nothing else moves between
+          only then signs - producing <code>signed-tx.json</code>. Nothing else moves between
           them, and the offline machine needs no network, no RPC and no blockhash.
         </p>
       </div>
@@ -406,8 +406,8 @@ new_seed  = sha256(seed ‖ digest)</code></pre>
           <tr><td class="cmd">sign / broadcast</td><td><span class="chip chip-ok">verified</span></td><td><span class="chip chip-ok">verified</span></td><td>Used by every flow above</td></tr>
           <tr><td class="cmd">governance-deposit</td><td><span class="chip chip-wait">devnet only</span></td><td><span class="chip chip-ok">verified</span></td><td>Needs a real DAO to test further</td></tr>
           <tr><td class="cmd">governance-cast-vote</td><td><span class="chip chip-wait">devnet only</span></td><td><span class="chip chip-ok">verified</span></td><td>Voted on a live proposal</td></tr>
-          <tr><td class="cmd">governance-relinquish-vote</td><td><span class="chip chip-wait">devnet only</span></td><td><span class="chip chip-ok">verified</span></td><td>&mdash;</td></tr>
-          <tr><td class="cmd">governance-withdraw</td><td><span class="chip chip-wait">devnet only</span></td><td><span class="chip chip-ok">verified</span></td><td>&mdash;</td></tr>
+          <tr><td class="cmd">governance-relinquish-vote</td><td><span class="chip chip-wait">devnet only</span></td><td><span class="chip chip-ok">verified</span></td><td>-</td></tr>
+          <tr><td class="cmd">governance-withdraw</td><td><span class="chip chip-wait">devnet only</span></td><td><span class="chip chip-ok">verified</span></td><td>-</td></tr>
         </tbody>
       </table>
     </div>
@@ -434,7 +434,7 @@ new_seed  = sha256(seed ‖ digest)</code></pre>
       <div class="card">
         <span class="label">Mainnet spend</span>
         <span class="value">2.156</span>
-        <span class="note">SOL — 2.152 program rent, 0.004 all testing</span>
+        <span class="note">SOL - 2.152 program rent, 0.004 all testing</span>
       </div>
     </div>
   </section>
@@ -465,36 +465,7 @@ new_seed  = sha256(seed ‖ digest)</code></pre>
       producer-supplied summary while signing bytes it never checked, so a compromised online
       machine could display &ldquo;0.001 SOL to Alice&rdquo; and have the cold wallet authorize
       a full drain. The signer now recomputes the digest from the raw instructions and renders
-      the decoded action — what you see is provably what you sign.
-    </p>
-  </section>
-
-  <section>
-    <h2>One deliberate trade-off</h2>
-    <p>
-      Supporting DAO voting required relaxing a rule. SPL Governance creates the vote record as
-      part of casting a vote, and creating an account needs someone to pay rent and sign for it.
-      The vault cannot pay rent, so the hot wallet has to co-sign that one instruction.
-    </p>
-    <div class="scroll">
-      <table>
-        <thead>
-          <tr><th>Scenario</th><th>Before</th><th>After</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Compromised hot wallet moves funds</td><td>impossible</td><td><strong>impossible</strong></td></tr>
-          <tr><td>Compromised hot wallet alters what was signed</td><td>impossible</td><td><strong>impossible</strong></td></tr>
-          <tr><td>Compromised cold wallet drains the vault</td><td>possible</td><td>possible</td></tr>
-          <tr><td>Compromised cold wallet debits the hot wallet</td><td>impossible</td><td><span class="chip chip-wait">possible, bounded</span></td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p>
-      The headline guarantee is untouched: a compromised online machine still cannot move funds.
-      The widening only applies when the cold key is already compromised, at which point the
-      vault is lost anyway. Three mitigations bound it — 12 of 13 commands never use a
-      co-signer, the broadcaster refuses co-signing for any program other than SPL Governance,
-      and the signing screen prints an explicit warning naming the account that can be debited.
+      the decoded action - what you see is provably what you sign.
     </p>
   </section>
 
@@ -535,7 +506,7 @@ new_seed  = sha256(seed ‖ digest)</code></pre>
     <h2>Try it</h2>
     <p>
       The branch is <code>feat/vector-integration</code>. The offline test suite needs no keys,
-      no funds and no network — a good first sanity check:
+      no funds and no network - a good first sanity check:
     </p>
     <pre><code>pnpm install
 pnpm exec ts-node smoke/adversarial-offline.ts   # 13 attacks, all refused
