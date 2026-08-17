@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Team status update on the Vector offline-signing CLI — mainnet deployment, verification coverage, security review findings, and open decisions.">
+<meta name="color-scheme" content="light dark">
+<style>
+  /* minimal reset — supplied by the artifact runtime, inlined here for standalone hosting */
+  *, *::before, *::after { box-sizing: border-box; }
+  body, h1, h2, h3, p, dl, dd, pre, figure { margin: 0; }
+  img, svg { display: block; max-width: 100%; }
+  html { -webkit-text-size-adjust: 100%; }
+</style>
+<title>Vector Offline Signer</title>
+<style>
+  /* ── tokens: light (complete palette) ───────────────────────── */
+  :root {
+    --ground:      #F6F8F7;
+    --surface:     #FFFFFF;
+    --surface-alt: #EFF3F1;
+    --ink:         #141D1A;
+    --ink-soft:    #4A5852;
+    --ink-faint:   #7B8983;
+    --rule:        #D9E0DC;
+    --rule-soft:   #E7ECE9;
+
+    --accent:      #1F6F5C;
+    --accent-soft: #DCEBE6;
+    --accent-ink:  #12483C;
+
+    --ok:          #2F6B41;
+    --ok-bg:       #DFEDE3;
+    --wait:        #7A5B12;
+    --wait-bg:     #F2E9D4;
+    --risk:        #973427;
+    --risk-bg:     #F5E0DC;
+
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+    --measure: 68ch;
+    --pad: clamp(1.25rem, 4vw, 3rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0E1513;
+      --surface:     #141D1A;
+      --surface-alt: #1A2522;
+      --ink:         #E3EAE6;
+      --ink-soft:    #A3B1AB;
+      --ink-faint:   #78867F;
+      --rule:        #263230;
+      --rule-soft:   #1D2825;
+
+      --accent:      #5FBFA4;
+      --accent-soft: #16302A;
+      --accent-ink:  #8FD8C1;
+
+      --ok:          #79C08D;
+      --ok-bg:       #17301F;
+      --wait:        #D2B26A;
+      --wait-bg:     #2E2716;
+      --risk:        #E0897A;
+      --risk-bg:     #331A17;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #0E1513;
+    --surface:     #141D1A;
+    --surface-alt: #1A2522;
+    --ink:         #E3EAE6;
+    --ink-soft:    #A3B1AB;
+    --ink-faint:   #78867F;
+    --rule:        #263230;
+    --rule-soft:   #1D2825;
+
+    --accent:      #5FBFA4;
+    --accent-soft: #16302A;
+    --accent-ink:  #8FD8C1;
+
+    --ok:          #79C08D;
+    --ok-bg:       #17301F;
+    --wait:        #D2B26A;
+    --wait-bg:     #2E2716;
+    --risk:        #E0897A;
+    --risk-bg:     #331A17;
+  }
+
+  /* ── base ──────────────────────────────────────────────────── */
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: var(--pad);
+    display: flex;
+    flex-direction: column;
+    gap: 3.25rem;
+  }
+
+  h1, h2, h3 { font-family: var(--mono); text-wrap: balance; margin: 0; font-weight: 600; }
+  h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); letter-spacing: -0.02em; line-height: 1.2; }
+  h2 { font-size: 1.0rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+  h3 { font-size: 0.95rem; letter-spacing: 0.01em; color: var(--ink); }
+  p  { margin: 0; max-width: var(--measure); color: var(--ink-soft); }
+  strong { color: var(--ink); font-weight: 600; }
+  code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--surface-alt);
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    padding: 0.08em 0.34em;
+    word-break: break-all;
+  }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+  section { display: flex; flex-direction: column; gap: 1rem; }
+  .stack  { display: flex; flex-direction: column; gap: 0.7rem; }
+  .stack-lg { display: flex; flex-direction: column; gap: 1.5rem; }
+
+  /* ── masthead ──────────────────────────────────────────────── */
+  .masthead { display: flex; flex-direction: column; gap: 1.25rem; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .lede { font-size: 1.05rem; max-width: var(--measure); }
+
+  .banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.6rem 1rem;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 0.9rem 1.1rem;
+  }
+  .banner .status {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 0.82rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+  }
+  .banner .addr {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--accent-ink);
+    word-break: break-all;
+  }
+
+  /* ── key/value grid ────────────────────────────────────────── */
+  .kv {
+    display: grid;
+    grid-template-columns: minmax(9rem, auto) 1fr;
+    gap: 0.5rem 1.5rem;
+    font-size: 0.9rem;
+  }
+  .kv dt {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    padding-top: 0.12rem;
+  }
+  .kv dd { margin: 0; font-family: var(--mono); font-size: 0.84rem; word-break: break-all; }
+
+  /* ── tables ────────────────────────────────────────────────── */
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+  th, td { text-align: left; padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--rule-soft); }
+  thead th {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    background: var(--surface-alt);
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.cmd { font-family: var(--mono); font-size: 0.84rem; white-space: nowrap; }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  th.num { text-align: right; }
+
+  /* ── state chips ───────────────────────────────────────────── */
+  .chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.12rem 0.45rem;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .chip-ok   { background: var(--ok-bg);   color: var(--ok); }
+  .chip-wait { background: var(--wait-bg); color: var(--wait); }
+  .chip-risk { background: var(--risk-bg); color: var(--risk); }
+
+  /* ── cards ─────────────────────────────────────────────────── */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .card .label {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .card .value {
+    font-family: var(--mono);
+    font-size: 1.45rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .card .note { font-size: 0.82rem; color: var(--ink-soft); }
+
+  /* ── decision blocks ───────────────────────────────────────── */
+  .decision {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 6px 6px 0;
+    padding: 0.95rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .decision.is-risk { border-left-color: var(--risk); }
+  .decision .who {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  /* ── code block ────────────────────────────────────────────── */
+  pre {
+    margin: 0;
+    background: var(--surface-alt);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    line-height: 1.55;
+    color: var(--ink);
+  }
+  pre code { background: none; border: none; padding: 0; font-size: inherit; }
+
+  ul { margin: 0; padding-left: 1.15rem; color: var(--ink-soft); max-width: var(--measure); }
+  li { margin-bottom: 0.35rem; }
+  li::marker { color: var(--accent); }
+
+  hr { border: none; border-top: 1px solid var(--rule); margin: 0; }
+
+  footer {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+    border-top: 1px solid var(--rule);
+    padding-top: 1.25rem;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Team update &middot; offline-signer-cli</div>
+    <h1>Vector: offline signing without durable nonces</h1>
+    <p class="lede">
+      A cold wallet can now authorize SOL transfers, SPL token transfers, staking and DAO
+      votes by signing a 32-byte hash — never a Solana transaction. The on-chain program
+      is deployed and the flow has been exercised end-to-end with real funds.
+    </p>
+    <div class="banner">
+      <span class="status">Live on mainnet-beta</span>
+      <span class="addr">FkCL7nUJym3Yc9PVgr7TQ3TRn5uJApu7FdGSV1X6rKVd</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Why we changed the approach</h2>
+    <p>
+      The old flow relied on <strong>durable nonces</strong>, which the Solana Foundation is
+      deprecating. It also carried on-chain state an attacker could grief. Vector removes
+      both problems: there is no nonce account, and the only external dependency is the
+      native Ed25519 precompile, which ships with every cluster and cannot be turned off.
+    </p>
+    <p>
+      The trade is that the cold wallet signs an opaque digest rather than a transaction, so
+      transactions never expire — the hot wallet attaches a fresh blockhash at broadcast time.
+      That removes the ~60-second signing window that made air-gapped Solana signing painful.
+    </p>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <div class="stack-lg">
+      <div class="stack">
+        <h3>Two accounts per cold wallet</h3>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>Account</th><th>Derivation</th><th>Owner</th><th>Holds</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="cmd">Vector PDA</td>
+                <td class="cmd">["vector", authority]</td>
+                <td>Vector program</td>
+                <td>Authority key, hashchain seed</td>
+              </tr>
+              <tr>
+                <td class="cmd">Vault PDA</td>
+                <td class="cmd">["vault", authority]</td>
+                <td>System program</td>
+                <td>SOL, SPL token accounts, stake authority</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          State and value are split because <code>SystemProgram.transfer</code> refuses to move
+          SOL out of an account carrying data. The vault stays data-free so it can behave like
+          an ordinary wallet, while the program signs for it via <code>invoke_signed</code>.
+        </p>
+      </div>
+
+      <div class="stack">
+        <h3>Replay protection</h3>
+        <pre><code>digest    = sha256(seed ‖ action_tag ‖ program_id ‖ payload)
+new_seed  = sha256(seed ‖ digest)</code></pre>
+        <p>
+          Every successful action advances the seed, so a signature is single-use and
+          non-rewindable. Binding <code>program_id</code> means a signature valid against one
+          deployment can never replay against another.
+        </p>
+      </div>
+
+      <div class="stack">
+        <h3>What crosses the air gap</h3>
+        <p>
+          The online machine writes <code>unsigned-tx.json</code>. The offline machine
+          recomputes the digest from the raw instructions, renders what they actually do, and
+          only then signs — producing <code>signed-tx.json</code>. Nothing else moves between
+          them, and the offline machine needs no network, no RPC and no blockhash.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Verification status</h2>
+    <p>
+      Every command was exercised against the real deployed program, not a mock. Devnet ran
+      the byte-identical binary at the same program ID, so devnet results carry over.
+    </p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Command</th><th>Mainnet</th><th>Devnet</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="cmd">init-authority</td><td><span class="chip chip-ok">verified</span></td><td><span class="chip chip-ok">verified</span></td><td>Creates both PDAs</td></tr>
+          <tr><td class="cmd">sol-transfer</td><td><span class="chip chip-ok">verified</span></td><td><span class="chip chip-ok">verified</span></td><td>Proves digest parity client ↔ chain</td></tr>
+          <tr><td class="cmd">token-transfer</td><td><span class="chip chip-ok">verified</span></td><td><span class="chip chip-ok">verified</span></td><td>Recipient with no token account</td></tr>
+          <tr><td class="cmd">stake-create</td><td><span class="chip chip-ok">verified</span></td><td><span class="chip chip-ok">verified</span></td><td>Authorities set to vault</td></tr>
+          <tr><td class="cmd">stake-delegate</td><td><span class="chip chip-ok">verified</span></td><td><span class="chip chip-ok">verified</span></td><td>Real validator</td></tr>
+          <tr><td class="cmd">stake-deactivate</td><td><span class="chip chip-ok">verified</span></td><td><span class="chip chip-ok">verified</span></td><td>Cancelled before activation</td></tr>
+          <tr><td class="cmd">stake-withdraw</td><td><span class="chip chip-ok">verified</span></td><td><span class="chip chip-ok">verified</span></td><td>Full round trip</td></tr>
+          <tr><td class="cmd">close-authority</td><td><span class="chip chip-ok">verified</span></td><td><span class="chip chip-ok">verified</span></td><td>Drains vault, refunds rent</td></tr>
+          <tr><td class="cmd">sign / broadcast</td><td><span class="chip chip-ok">verified</span></td><td><span class="chip chip-ok">verified</span></td><td>Used by every flow above</td></tr>
+          <tr><td class="cmd">governance-deposit</td><td><span class="chip chip-wait">devnet only</span></td><td><span class="chip chip-ok">verified</span></td><td>Needs a real DAO to test further</td></tr>
+          <tr><td class="cmd">governance-cast-vote</td><td><span class="chip chip-wait">devnet only</span></td><td><span class="chip chip-ok">verified</span></td><td>Voted on a live proposal</td></tr>
+          <tr><td class="cmd">governance-relinquish-vote</td><td><span class="chip chip-wait">devnet only</span></td><td><span class="chip chip-ok">verified</span></td><td>&mdash;</td></tr>
+          <tr><td class="cmd">governance-withdraw</td><td><span class="chip chip-wait">devnet only</span></td><td><span class="chip chip-ok">verified</span></td><td>&mdash;</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Governance is left at devnet deliberately. Proving it on mainnet requires a real realm
+      with real governing tokens; a synthetic one would cost money and demonstrate nothing
+      devnet has not already shown. Worth doing once we know which DAO we actually vote in.
+    </p>
+  </section>
+
+  <section>
+    <h2>By the numbers</h2>
+    <div class="cards">
+      <div class="card">
+        <span class="label">Offline test suite</span>
+        <span class="value">30 / 30</span>
+        <span class="note">13 adversarial, 6 broadcast-attack, 11 command coverage</span>
+      </div>
+      <div class="card">
+        <span class="label">On-chain program</span>
+        <span class="value">613</span>
+        <span class="note">lines of Rust, Anchor 0.32.1</span>
+      </div>
+      <div class="card">
+        <span class="label">Mainnet spend</span>
+        <span class="value">2.156</span>
+        <span class="note">SOL — 2.152 program rent, 0.004 all testing</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Security review</h2>
+    <p>
+      Three independent review passes were run before deployment: a targeted security review,
+      a multi-agent code review, and a custom probe testing 21 named attack hypotheses against
+      the on-chain program. Five findings, all now fixed and re-verified on chain.
+    </p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Finding</th><th>Severity</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Offline signer displayed unverified metadata while signing an opaque digest</td><td><span class="chip chip-risk">high</span></td><td><span class="chip chip-ok">fixed</span></td></tr>
+          <tr><td>Token transfer to a new recipient failed at the last step</td><td><span class="chip chip-wait">medium</span></td><td><span class="chip chip-ok">fixed</span></td></tr>
+          <tr><td>Redundant PDA derivation burning compute</td><td>low</td><td><span class="chip chip-ok">fixed</span></td></tr>
+          <tr><td>Program could re-enter itself via sub-instruction</td><td>low</td><td><span class="chip chip-ok">fixed</span></td></tr>
+          <tr><td>Digest not bound to program ID (cross-deployment replay)</td><td>low</td><td><span class="chip chip-ok">fixed</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      The first finding is the one that mattered. The signer previously showed a
+      producer-supplied summary while signing bytes it never checked, so a compromised online
+      machine could display &ldquo;0.001 SOL to Alice&rdquo; and have the cold wallet authorize
+      a full drain. The signer now recomputes the digest from the raw instructions and renders
+      the decoded action — what you see is provably what you sign.
+    </p>
+  </section>
+
+  <section>
+    <h2>One deliberate trade-off</h2>
+    <p>
+      Supporting DAO voting required relaxing a rule. SPL Governance creates the vote record as
+      part of casting a vote, and creating an account needs someone to pay rent and sign for it.
+      The vault cannot pay rent, so the hot wallet has to co-sign that one instruction.
+    </p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr><th>Scenario</th><th>Before</th><th>After</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Compromised hot wallet moves funds</td><td>impossible</td><td><strong>impossible</strong></td></tr>
+          <tr><td>Compromised hot wallet alters what was signed</td><td>impossible</td><td><strong>impossible</strong></td></tr>
+          <tr><td>Compromised cold wallet drains the vault</td><td>possible</td><td>possible</td></tr>
+          <tr><td>Compromised cold wallet debits the hot wallet</td><td>impossible</td><td><span class="chip chip-wait">possible, bounded</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      The headline guarantee is untouched: a compromised online machine still cannot move funds.
+      The widening only applies when the cold key is already compromised, at which point the
+      vault is lost anyway. Three mitigations bound it — 12 of 13 commands never use a
+      co-signer, the broadcaster refuses co-signing for any program other than SPL Governance,
+      and the signing screen prints an explicit warning naming the account that can be debited.
+    </p>
+  </section>
+
+  <section>
+    <h2>Open decisions</h2>
+    <div class="stack">
+      <div class="decision is-risk">
+        <span class="who">Needs a decision &middot; budget</span>
+        <h3>No paid audit yet</h3>
+        <p>
+          The three review passes are a solid pre-audit, not a substitute for one. Typical
+          engagement with a firm like Neodyme, OtterSec or Zellic runs weeks and five figures.
+          Recommended before onboarding third-party funds; not required to keep testing.
+        </p>
+      </div>
+      <div class="decision">
+        <span class="who">Needs input &middot; product</span>
+        <h3>Which DAO do we vote in?</h3>
+        <p>
+          The four governance commands work against standard SPL Governance. Naming a target
+          realm lets us finish mainnet verification and confirm the decoder renders that DAO's
+          proposals legibly at signing time.
+        </p>
+      </div>
+      <div class="decision">
+        <span class="who">Operational</span>
+        <h3>Cold key custody</h3>
+        <p>
+          The test cold key was generated on a networked machine with no recorded mnemonic.
+          Production keys must be generated air-gapped, backed up in two physically separate
+          locations, and documented so a successor can operate them.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Try it</h2>
+    <p>
+      The branch is <code>feat/vector-integration</code>. The offline test suite needs no keys,
+      no funds and no network — a good first sanity check:
+    </p>
+    <pre><code>pnpm install
+pnpm exec ts-node smoke/adversarial-offline.ts   # 13 attacks, all refused
+pnpm exec ts-node smoke/function-coverage.ts     # every command builds + signs</code></pre>
+    <p>
+      Reviewing the on-chain program is about a fifteen-minute read: the interesting files are
+      the precompile introspection and the sub-instruction decoder. <code>README.md</code>
+      covers the full flow and <code>docs/mainnet-deployment.md</code> covers deployment,
+      accepted risks and the operational runbook.
+    </p>
+  </section>
+
+  <section>
+    <h2>Reference</h2>
+    <dl class="kv">
+      <dt>Program ID</dt><dd>FkCL7nUJym3Yc9PVgr7TQ3TRn5uJApu7FdGSV1X6rKVd</dd>
+      <dt>Cluster</dt><dd>mainnet-beta &middot; also deployed to devnet at the same address</dd>
+    </dl>
+  </section>
+
+  <footer>
+    Status accurate as of the mainnet deployment and verification runs described above.
+    Governance remains devnet-verified only.
+  </footer>
+
+</div>
+</body>
+</html>
